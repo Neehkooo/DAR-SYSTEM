@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: dar-system-backend
+    env: python
+    plan: free
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && gunicorn core.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com"
