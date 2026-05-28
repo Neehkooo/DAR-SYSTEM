@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { MdLock, MdPerson, MdVisibility, MdVisibilityOff } from 'react-icons/md'
 import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
+import { apiUrl } from '../utils/apiConfig'
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('')
@@ -23,7 +24,7 @@ const Login = ({ onLogin }) => {
 
     // Real API call to Django backend
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/accounts/login/', {
+      const res = await fetch(apiUrl('accounts/login/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -5,6 +5,7 @@ import {
   MdClose,
   MdDescription,
 } from 'react-icons/md'
+import { apiUrl } from './utils/apiConfig'
 
 import Login from './pages/login'
 import Sidebar from './pages/components/sidebar'
@@ -108,7 +109,7 @@ function App() {
   // Fetch recent activity logs for notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/activity_logs/?limit=${NOTIF_LIMIT}`)
+      const res = await fetch(apiUrl(`activity_logs/?limit=${NOTIF_LIMIT}`))
       if (res.ok) {
         const data = await res.json()
         const logs = Array.isArray(data) ? data : (data.results || [])

@@ -21,6 +21,7 @@ import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
 import socotecLogo from '../assets/SOCOTEC-LOGO.png'
 import html2pdf from 'html2pdf.js'
+import { apiUrl } from '../utils/apiConfig'
 
 /* ─────────────────────────────────────────────
    Official Header
@@ -972,7 +973,7 @@ const readApiError = async (res, fallback) => {
 }
 
 const saveDocument = async (endpoint, payload, currentUser, fallbackMsg) => {
-  const res = await fetch(`http://127.0.0.1:8000/api/${endpoint}/`, {
+  const res = await fetch(apiUrl(endpoint), {
     method: 'POST',
     headers: apiHeaders(currentUser),
     body: JSON.stringify(payload),

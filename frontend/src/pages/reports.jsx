@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { MdPrint, MdClose, MdFilterList, MdCheck, MdTrendingUp, MdInsertDriveFile, MdAttachMoney } from 'react-icons/md'
 import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
+import { apiUrl } from '../utils/apiConfig'
 
 const colors = {
   noa: '#0B6623',
@@ -80,12 +81,12 @@ const Reports = () => {
   const fetchData = async () => {
     try {
       const endpoints = [
-        { url: 'http://127.0.0.1:8000/api/noa/', setter: setNoaList },
-        { url: 'http://127.0.0.1:8000/api/ntp/', setter: setNtpList },
-        { url: 'http://127.0.0.1:8000/api/reso/', setter: setResoList },
-        { url: 'http://127.0.0.1:8000/api/reso_svp/', setter: setResoSVPList },
-        { url: 'http://127.0.0.1:8000/api/reso_lov/', setter: setResoLOVList },
-        { url: 'http://127.0.0.1:8000/api/reso_emergency_split/', setter: setResoEmergencySplitList }
+        { url: apiUrl('noa/'), setter: setNoaList },
+        { url: apiUrl('ntp/'), setter: setNtpList },
+        { url: apiUrl('reso/'), setter: setResoList },
+        { url: apiUrl('reso_svp/'), setter: setResoSVPList },
+        { url: apiUrl('reso_lov/'), setter: setResoLOVList },
+        { url: apiUrl('reso_emergency_split/'), setter: setResoEmergencySplitList }
       ]
 
       await Promise.all(

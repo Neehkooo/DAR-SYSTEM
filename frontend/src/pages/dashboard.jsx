@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { apiUrl } from '../utils/apiConfig'
 
 const fallbackMonthlyData = [
   { name: 'Jan', 'NOA & NTP': 45, 'RESO Direct Acquisition': 20, 'RESO SVP': 15, 'RESO LOV': 10, 'RESO Emergency Split': 5 },
@@ -43,7 +44,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const statsRes = await fetch('http://127.0.0.1:8000/api/dashboard/stats/')
+        const statsRes = await fetch(apiUrl('dashboard/stats/'))
         if (statsRes.ok) {
           const stats = await statsRes.json()
           setChartData({
@@ -57,7 +58,7 @@ const Dashboard = () => {
       }
 
       try {
-        const logsRes = await fetch(`http://127.0.0.1:8000/api/activity_logs/?limit=${RECENT_ACTIVITY_LIMIT}`)
+        const logsRes = await fetch(apiUrl(`activity_logs/?limit=${RECENT_ACTIVITY_LIMIT}`))
         if (logsRes.ok) {
           const data = await logsRes.json()
           const logs = Array.isArray(data) ? data : (data.results || [])

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MdAssessment, MdPersonAdd, MdClose, MdCheckCircle, MdError, MdAdd, MdEdit, MdDelete, MdSettingsBackupRestore, MdCloudDownload, MdUploadFile, MdWarning, MdSchedule, MdDragIndicator } from 'react-icons/md'
+import { apiUrl } from '../utils/apiConfig'
 
 const Backup = ({ currentUser }) => {
   const [status, setStatus] = useState({ isOpen: false, type: 'success', message: '' })
@@ -21,7 +22,7 @@ const Backup = ({ currentUser }) => {
 
   const fetchBackupInfo = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/backup/info/')
+      const res = await fetch(apiUrl('backup/info/'))
       if (res.ok) {
         const data = await res.json()
         setBackupInfo(data)
@@ -35,7 +36,7 @@ const Backup = ({ currentUser }) => {
     if (isDownloading) return
     setIsDownloading(true)
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/backup/download/')
+      const response = await fetch(apiUrl('backup/download/'))
       if (!response.ok) throw new Error('Server error')
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
@@ -98,7 +99,7 @@ const Backup = ({ currentUser }) => {
     formData.append('backup_file', selectedFile)
     setIsRestoring(true)
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/backup/restore/', {
+      const res = await fetch(apiUrl('backup/restore/'), {
         method: 'POST',
         headers: { 'X-User': currentUser?.name || 'System' },
         body: formData,
@@ -393,7 +394,7 @@ const ActivityLogs = () => {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/activity_logs/')
+      const res = await fetch(apiUrl('activity_logs/'))
       const data = await res.json()
       setLogs(data)
     } catch (err) {
@@ -527,11 +528,11 @@ const DocumentSettings = ({ currentUser }) => {
 
   const fetchSignatories = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/signatories/')
+      const res = await fetch(apiUrl('signatories/'))
       const data = await res.json()
       setSignatories(data)
 
-      const delRes = await fetch('http://127.0.0.1:8000/api/signatories/deleted/')
+      const delRes = await fetch(apiUrl('signatories/deleted/'))
       if (delRes.ok) {
         const delData = await delRes.json()
         setDeletedSignatories(delData)
@@ -545,7 +546,7 @@ const DocumentSettings = ({ currentUser }) => {
 
   const handleRestoreSignatory = async (id) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/signatories/${id}/restore/`, {
+      const res = await fetch(apiUrl(`signatories/${id}/restore/`), {
         method: 'POST',
         headers: { 'X-User': currentUser?.name || 'System' }
       })
@@ -650,8 +651,8 @@ const DocumentSettings = ({ currentUser }) => {
 
     try {
       const url = editingSignatory 
-        ? `http://127.0.0.1:8000/api/signatories/${editingSignatory.id}/` 
-        : 'http://127.0.0.1:8000/api/signatories/'
+        ? apiUrl(`signatories/${editingSignatory.id}/`) 
+        : apiUrl('signatories/')
       
       const method = editingSignatory ? 'PUT' : 'POST'
 
@@ -1055,7 +1056,7 @@ const UserManagement = ({ currentUser }) => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/accounts/users/')
+      const res = await fetch(apiUrl('accounts/users/'))
       const data = await res.json()
       setUsers(data)
     } catch (err) {
