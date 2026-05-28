@@ -143,9 +143,10 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get(
         'CORS_ALLOWED_ORIGINS',
-        'http://127.0.0.1:5173,http://127.0.0.1:8000,http://localhost:5173,http://localhost:8000'
+        'http://127.0.0.1:5173,http://127.0.0.1:8000,http://localhost:5173,http://localhost:8000,https://dar-docs-coral.vercel.app'
     ).split(',') if o.strip()
 ]
+
 
 # Allow custom header used by the frontend to identify the acting user in activity logs
 CORS_ALLOW_HEADERS = (
