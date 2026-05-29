@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
@@ -64,6 +65,7 @@ class UserViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f'Failed to archive user: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@csrf_exempt
 @api_view(['POST'])
 def login_view(request):
     username = request.data.get('username')
@@ -96,6 +98,7 @@ def login_view(request):
         return Response({'error': 'Invalid username or password'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@csrf_exempt
 @api_view(['POST'])
 def change_password_view(request):
     """Change the password for the authenticated user."""
