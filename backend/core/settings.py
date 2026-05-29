@@ -32,7 +32,7 @@ DEBUG = __import__('os').environ.get('DJANGO_DEBUG', 'false').lower() == 'true'
 
 
 # In production, set ALLOWED_HOSTS to your domain(s) or load from env.
-ALLOWED_HOSTS = [h for h in __import__('os').environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
+ALLOWED_HOSTS = [h for h in __import__('os').environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,dar-system-backend.onrender.com').split(',') if h.strip()]
 
 
 
