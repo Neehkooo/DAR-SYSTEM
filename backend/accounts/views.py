@@ -158,3 +158,18 @@ def change_password_view(request):
     except Exception as e:
         return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@csrf_exempt
+@api_view(['GET'])
+def debug_users(request):
+    """Debug endpoint to check if users exist in the database."""
+    try:
+        users = User.objects.all().values('id', 'username', 'first_name', 'last_name', 'is_active', 'email')
+        user_list = list(users)
+        return Response({
+            'total_users': len(user_list),
+            'users': user_list
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': f'Error fetching users: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
