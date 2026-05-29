@@ -52,10 +52,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # ← Must be FIRST
     'django.middleware.security.SecurityMiddleware',
-    
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -135,18 +134,28 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / 'static').exists() else []
 
 # CORS Settings
-# Default to only allowing the local dev frontend.
-# In production, set CORS_ALLOWED_ORIGINS (comma-separated) accordingly.
 import os
 
 CORS_ALLOW_ALL_ORIGINS = False
+
+# Production and development allowed origins
 CORS_ALLOWED_ORIGINS = [
-    o.strip() for o in os.environ.get(
-        'CORS_ALLOWED_ORIGINS',
-        'http://127.0.0.1:5173,http://127.0.0.1:8000,http://localhost:5173,http://localhost:8000,https://dar-docs-coral.vercel.app'
-    ).split(',') if o.strip()
+    # Local development
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8000',
+    'http://localhost:5173',
+    'http://localhost:8000',
+    # Production
+    'https://dar-docs-coral.vercel.app',
 ]
 
+# Allow additional origins from environment variable if set
+if os.environ.get('CORS_ALLOWED_ORIGINS'):
+    env_origins = [o.strip() for o in os.environ.get('CORS_ALLOWED_ORIGINS').split(',') if o.strip()]
+    CORS_ALLOWED_ORIGINS.extend(env_origins)
+
+# Allow credentials (cookies, authorization headers) in CORS requests
+CORS_ALLOW_CREDENTIALS = True
 
 # Allow custom header used by the frontend to identify the acting user in activity logs
 CORS_ALLOW_HEADERS = (
