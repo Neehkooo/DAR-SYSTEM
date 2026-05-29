@@ -163,3 +163,8 @@ CORS_ALLOW_HEADERS = (
     'x-user',
 )
 
+# Django REST Framework Configuration
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+}
+

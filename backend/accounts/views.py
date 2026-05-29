@@ -68,34 +68,38 @@ class UserViewSet(viewsets.ModelViewSet):
 @csrf_exempt
 @api_view(['POST'])
 def login_view(request):
-    username = request.data.get('username')
-    password = request.data.get('password')
+    try:
+        username = request.data.get('username') if request.data else None
+        password = request.data.get('password') if request.data else None
 
-    if not username or not password:
-        return Response({'error': 'Please provide both username and password'}, status=status.HTTP_400_BAD_REQUEST)
+        if not username or not password:
+            return Response({'error': 'Please provide both username and password'}, status=status.HTTP_400_BAD_REQUEST)
 
-    user = authenticate(username=username, password=password)
+        user = authenticate(username=username, password=password)
 
-    if user is not None:
-        if user.is_active:
-            # Write activity log
-            try:
-                from documents.models import ActivityLog
-                display_name = f'{user.first_name} {user.last_name}'.strip() or user.username
-                ActivityLog.objects.create(
-                    user=display_name,
-                    action='LOGIN',
-                    description=f'{display_name} logged in to the system'
-                )
-            except Exception:
-                pass  # Never break login just because logging failed
+        if user is not None:
+            if user.is_active:
+                # Write activity log
+                try:
+                    from documents.models import ActivityLog
+                    display_name = f'{user.first_name} {user.last_name}'.strip() or user.username
+                    ActivityLog.objects.create(
+                        user=display_name,
+                        action='LOGIN',
+                        description=f'{display_name} logged in to the system'
+                    )
+                except Exception:
+                    pass  # Never break login just because logging failed
 
-            serializer = UserSerializer(user)
-            return Response(serializer.data)
+                serializer = UserSerializer(user)
+                return Response(serializer.data)
+            else:
+                return Response({'error': 'This account is inactive'}, status=status.HTTP_401_UNAUTHORIZED)
         else:
-            return Response({'error': 'This account is inactive'}, status=status.HTTP_401_UNAUTHORIZED)
-    else:
-        return Response({'error': 'Invalid username or password'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Invalid username or password'}, status=status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        # Ensure we always return JSON, even on unexpected errors
+        return Response({'error': f'Login failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
