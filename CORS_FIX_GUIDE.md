@@ -19,24 +19,24 @@
   - Automatic deployment to Render on main branch push
   - Django health checks before deployment
 
-## 🚀 Next Steps to Enable Auto-Deploy
+## 🚀 Auto-Deploy Setup (Easy - No Hooks Needed!)
 
-### Option A: Using Render Deploy Hook (Recommended)
-1. Go to your Render dashboard: https://dashboard.render.com
-2. Click on your backend service (`dar-system-backend`)
-3. Go to "Settings" → "Deploy Hook"
-4. Copy the webhook URL
-5. Add it to GitHub:
-   - Go to: https://github.com/Neehkooo/DAR-SYSTEM/settings/secrets/actions
-   - Click "New repository secret"
-   - Name: `RENDER_DEPLOY_HOOK`
-   - Value: (paste the Render webhook URL)
-6. Now, every push to `main` will trigger automatic deployment!
+Render can automatically redeploy your backend whenever you push to GitHub. Here's how:
 
-### Option B: Direct Render Integration (Alternative)
-1. In Render dashboard, go to your service settings
-2. Under "Build & Deploy", ensure GitHub is connected
-3. Enable "Auto-deploy on push"
+### In Render Dashboard:
+1. Go to https://dashboard.render.com
+2. Click your **dar-system-backend** service
+3. Go to **Settings** tab
+4. Scroll to **Build & Deploy** section
+5. Under **Git Repo Settings**:
+   - Verify GitHub is connected (should show repo: `Neehkooo/DAR-SYSTEM`)
+   - Toggle **Auto-Deploy** to ON
+6. **Done!** Every push to `main` will auto-deploy automatically
+
+### That's It!
+- Push to GitHub → Render automatically rebuilds and deploys
+- GitHub Actions will test your code first
+- No additional setup needed
 
 ## ✅ Verify the Fix Works
 

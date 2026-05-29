@@ -1,4 +1,4 @@
-name: Deploy to Render
+name: Backend Tests
 
 on:
   push:
@@ -31,18 +31,3 @@ jobs:
         run: |
           cd backend
           python manage.py check
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    name: Deploy to Render
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: Trigger Render deployment
-        run: |
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
-            curl --request POST \
-              --url "${{ secrets.RENDER_DEPLOY_HOOK }}" \
-              --header 'Content-Type: application/json'
-          fi
