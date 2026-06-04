@@ -581,7 +581,7 @@ const DocumentSettings = ({ currentUser }) => {
 
   const handleRestoreDefaults = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/signatories/restore_defaults/', {
+      const res = await fetch(apiUrl('signatories/restore_defaults/'), {
         method: 'POST',
         headers: { 'X-User': currentUser?.name || 'System' }
       })
@@ -701,7 +701,7 @@ const DocumentSettings = ({ currentUser }) => {
     const { sigId } = deleteConfirmModal
     setDeleteConfirmModal({ isOpen: false, sigId: null, sigName: '' })
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/signatories/${sigId}/`, {
+      const res = await fetch(apiUrl(`signatories/${sigId}/`), {
         method: 'DELETE',
         headers: { 'X-User': currentUser?.name || 'System' }
       })
@@ -1051,6 +1051,7 @@ const UserManagement = ({ currentUser }) => {
     role: 'Employee',
     password: ''
   })
+  const [editingUser, setEditingUser] = useState(null)
   const [triedSubmit, setTriedSubmit] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRole, setSelectedRole] = useState('All')
@@ -1081,11 +1082,25 @@ const UserManagement = ({ currentUser }) => {
     return matchesRole && matchesSearch
   })
   const handleOpenCreateModal = () => {
+    setEditingUser(null)
     setTriedSubmit(false)
     setFormData({ first_name: '', last_name: '', email: '', role: 'Employee', password: '' })
     setIsModalOpen(true)
   }
-  const handleCreateUser = async () => {
+
+  const handleOpenEditModal = (user) => {
+    setEditingUser(user)
+    setTriedSubmit(false)
+    setFormData({
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      email: user.email || user.username || '',
+      role: user.role || 'Employee',
+      password: '' // leave blank unless changing
+    })
+    setIsModalOpen(true)
+  }
+  const handleSaveUser = async () => {
     setTriedSubmit(true)
     if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.email.trim()) {
       setStatusModal({ isOpen: true, type: 'error', message: 'All fields (First Name, Last Name, and Email) are required. No blank spaces can be passed.' })
@@ -1093,20 +1108,33 @@ const UserManagement = ({ currentUser }) => {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/accounts/users/', {
-        method: 'POST',
+      const url = editingUser 
+        ? apiUrl(`accounts/users/${editingUser.id}/`) 
+        : apiUrl('accounts/users/')
+      
+      const method = editingUser ? 'PUT' : 'POST'
+      
+      const payload = {
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        email: formData.email.trim(),
+        username: formData.email.trim(),
+        role: formData.role
+      }
+      
+      if (formData.password) {
+        payload.password = formData.password
+      } else if (!editingUser) {
+        payload.password = 'dar12345'
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'X-User': currentUser?.name || 'System'
         },
-        body: JSON.stringify({
-          first_name: formData.first_name.trim(),
-          last_name: formData.last_name.trim(),
-          email: formData.email.trim(),
-          username: formData.email.trim(),
-          password: formData.password || 'dar12345',
-          role: formData.role
-        })
+        body: JSON.stringify(payload)
       })
       
       const data = await res.json()
@@ -1114,15 +1142,16 @@ const UserManagement = ({ currentUser }) => {
       if (res.ok) {
         setIsModalOpen(false)
         setTriedSubmit(false)
+        setEditingUser(null)
         setFormData({ first_name: '', last_name: '', email: '', role: 'Employee', password: '' })
         fetchUsers()
-        setStatusModal({ isOpen: true, type: 'success', message: 'User created successfully!' })
+        setStatusModal({ isOpen: true, type: 'success', message: editingUser ? 'User updated successfully!' : 'User created successfully!' })
       } else {
-        const errorMsg = data.username ? `Username: ${data.username[0]}` : (data.email ? `Email: ${data.email[0]}` : 'Failed to create user.')
+        const errorMsg = data.username ? `Username: ${data.username[0]}` : (data.email ? `Email: ${data.email[0]}` : `Failed to ${editingUser ? 'update' : 'create'} user.`)
         setStatusModal({ isOpen: true, type: 'error', message: errorMsg })
       }
     } catch (err) {
-      console.error('Error creating user', err)
+      console.error(`Error ${editingUser ? 'updating' : 'creating'} user`, err)
       setStatusModal({ isOpen: true, type: 'error', message: 'Cannot connect to server.' })
     }
   }
@@ -1141,7 +1170,7 @@ const UserManagement = ({ currentUser }) => {
     const { userId } = archiveConfirmModal
     setArchiveConfirmModal({ isOpen: false, userId: null, userName: '' })
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/accounts/users/${userId}/archive/`, {
+      const res = await fetch(apiUrl(`accounts/users/${userId}/archive/`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1228,7 +1257,8 @@ const UserManagement = ({ currentUser }) => {
                       {user.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="p-4 pr-6 text-right">
+                  <td className="p-4 pr-6 text-right space-x-3">
+                    <button onClick={() => handleOpenEditModal(user)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">Edit</button>
                     <button onClick={() => handleArchiveUser(user.id)} className="text-amber-600 hover:text-amber-800 text-sm font-medium transition-colors">Archive</button>
                   </td>
                 </tr>
@@ -1245,7 +1275,7 @@ const UserManagement = ({ currentUser }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-xl font-bold text-slate-800">Create New User</h3>
+              <h3 className="text-xl font-bold text-slate-800">{editingUser ? 'Edit User' : 'Create New User'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
                 <MdClose className="w-6 h-6" />
               </button>
@@ -1289,7 +1319,7 @@ const UserManagement = ({ currentUser }) => {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Password</label>
-                <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Leave blank for dar12345" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]" />
+                <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={editingUser ? "Leave blank to keep current password" : "Leave blank for dar12345"} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Role</label>
@@ -1301,7 +1331,7 @@ const UserManagement = ({ currentUser }) => {
             </div>
             <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
               <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
-              <button onClick={handleCreateUser} className="px-5 py-2.5 rounded-xl font-medium bg-[#0B6623] text-white hover:bg-[#09501b] shadow-sm shadow-[#0B6623]/20 transition-all">Create User</button>
+              <button onClick={handleSaveUser} className="px-5 py-2.5 rounded-xl font-medium bg-[#0B6623] text-white hover:bg-[#09501b] shadow-sm shadow-[#0B6623]/20 transition-all">{editingUser ? 'Save Changes' : 'Create User'}</button>
             </div>
           </div>
         </div>
