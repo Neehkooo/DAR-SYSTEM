@@ -395,10 +395,15 @@ const ActivityLogs = () => {
   const fetchLogs = async () => {
     try {
       const res = await fetch(apiUrl('activity_logs/'))
+      if (!res.ok) {
+        console.error(`API returned status: ${res.status}`)
+      }
       const data = await res.json()
-      setLogs(data)
+      const logsArray = Array.isArray(data) ? data : (data.results || [])
+      setLogs(logsArray)
     } catch (err) {
-      console.error(err)
+      console.error('Failed to fetch logs:', err)
+      setLogs([]) // Ensure it's always an array
     } finally {
       setIsLoading(false)
     }
