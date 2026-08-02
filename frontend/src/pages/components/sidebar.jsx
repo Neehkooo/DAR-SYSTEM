@@ -11,6 +11,7 @@ import {
 } from 'react-icons/md'
 
 import darLogo from '../../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
+import { changePassword } from '../../utils/supabaseServices'
 import { sidebarItems, templateDocs, optionsSubItems } from './sidebarConstants'
 
 const Sidebar = ({
@@ -56,33 +57,21 @@ const Sidebar = ({
 
     setIsChangingPassword(true)
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/accounts/change-password/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User': currentUser?.name || 'System'
-        },
-        body: JSON.stringify({
-          current_password: passwordForm.currentPassword,
-          new_password: passwordForm.newPassword
-        })
-      })
+      const { data, error } = await changePassword(passwordForm.newPassword)
 
-      const data = await res.json()
-
-      if (res.ok) {
-        setPasswordStatus({ isOpen: true, type: 'success', message: 'Password changed successfully!' })
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
-        setTimeout(() => {
-          setIsChangePasswordOpen(false)
-          setPasswordStatus({ isOpen: false, type: 'success', message: '' })
-        }, 2000)
-      } else {
-        setPasswordStatus({ isOpen: true, type: 'error', message: data.error || 'Failed to change password.' })
+      if (error) {
+        throw new Error(error.message || 'Failed to change password.')
       }
+
+      setPasswordStatus({ isOpen: true, type: 'success', message: 'Password changed successfully!' })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setTimeout(() => {
+        setIsChangePasswordOpen(false)
+        setPasswordStatus({ isOpen: false, type: 'success', message: '' })
+      }, 2000)
     } catch (err) {
       console.error(err)
-      setPasswordStatus({ isOpen: true, type: 'error', message: 'Connection error. Could not reach the server.' })
+      setPasswordStatus({ isOpen: true, type: 'error', message: err?.message || 'Failed to change password.' })
     } finally {
       setIsChangingPassword(false)
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { apiUrl } from '../utils/apiConfig'
+import { fetchAllDocuments, fetchActivityLogs } from '../utils/supabaseServices'
 
 const fallbackMonthlyData = [
   { name: 'Jan', 'NOA & NTP': 45, 'RESO Direct Acquisition': 20, 'RESO SVP': 15, 'RESO LOV': 10, 'RESO Emergency Split': 5 },
@@ -30,7 +30,7 @@ const colors = {
 
 const RECENT_ACTIVITY_LIMIT = 5
 
-const Dashboard = () => {
+const Dashboard = ({ dashboardMode = 'employee' }) => {
   const [chartData, setChartData] = useState({
     monthly: fallbackMonthlyData,
     yearly: fallbackYearlyData,
@@ -44,26 +44,54 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const statsRes = await fetch(apiUrl('dashboard/stats/'))
-        if (statsRes.ok) {
-          const stats = await statsRes.json()
-          setChartData({
-            monthly: stats.monthlyData,
-            yearly: stats.yearlyData,
-            currentYear: stats.currentYear
-          })
+        const docs = await fetchAllDocuments()
+        if (docs) {
+          const parseDate = (row, field) => {
+            const raw = row[field] || row.doc_date || row.reso_date
+            return raw ? new Date(raw) : null
+          }
+
+          const countRows = (rows, field, year, month = null) => {
+            return (rows || []).filter((row) => {
+              const date = parseDate(row, field)
+              if (!date || date.getFullYear() !== year) return false
+              return month === null ? true : date.getMonth() === month
+            }).length
+          }
+
+          const currentYear = new Date().getFullYear()
+          const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+          const monthly = monthsShort.map((monthLabel, index) => ({
+            name: monthLabel,
+            'NOA & NTP': countRows(docs.noa, 'doc_date', currentYear, index) + countRows(docs.ntp, 'doc_date', currentYear, index),
+            'RESO Direct Acquisition': countRows(docs.reso, 'reso_date', currentYear, index),
+            'RESO SVP': countRows(docs.reso_svp, 'reso_date', currentYear, index),
+            'RESO LOV': countRows(docs.reso_lov, 'reso_date', currentYear, index),
+            'RESO Emergency Split': countRows(docs.reso_emergency_split, 'reso_date', currentYear, index),
+          }))
+
+          const yearly = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2, currentYear + 3].map((year) => ({
+            name: String(year),
+            'NOA & NTP': countRows(docs.noa, 'doc_date', year) + countRows(docs.ntp, 'doc_date', year),
+            'RESO Direct Acquisition': countRows(docs.reso, 'reso_date', year),
+            'RESO SVP': countRows(docs.reso_svp, 'reso_date', year),
+            'RESO LOV': countRows(docs.reso_lov, 'reso_date', year),
+            'RESO Emergency Split': countRows(docs.reso_emergency_split, 'reso_date', year),
+          }))
+
+          setChartData({ monthly, yearly, currentYear })
         }
       } catch (err) {
         console.error('Error fetching dashboard stats, using fallback:', err)
       }
 
       try {
-        const logsRes = await fetch(apiUrl(`activity_logs/?limit=${RECENT_ACTIVITY_LIMIT}`))
-        if (logsRes.ok) {
-          const data = await logsRes.json()
-          const logs = Array.isArray(data) ? data : (data.results || [])
-          if (logs.length > 0) {
-            const formattedLogs = logs.slice(0, RECENT_ACTIVITY_LIMIT).map(log => {
+        const logsRes = await fetchActivityLogs(RECENT_ACTIVITY_LIMIT)
+        if (!logsRes.error) {
+          const data = Array.isArray(logsRes.data) ? logsRes.data : []
+          if (data.length > 0) {
+            const formattedLogs = data.slice(0, RECENT_ACTIVITY_LIMIT).map(log => {
               const name = log.user || 'System'
               const parts = name.trim().split(/\s+/)
               const initials = parts.length === 1
@@ -93,13 +121,15 @@ const Dashboard = () => {
               return {
                 user: name,
                 action: log.action || 'ACTION',
-                description: log.description || `${log.action} action`,
+                description: log.description || log.action || 'Performed action',
                 time: timeStr,
                 initials: initials
               }
             })
             setActivities(formattedLogs)
           }
+        } else {
+          console.error('Error fetching activity logs:', logsRes.error)
         }
       } catch (err) {
         console.error('Error fetching activity logs, using fallback:', err)
@@ -157,7 +187,9 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-8">
-      <h2 className="text-3xl font-bold mb-6" style={{ color: 'black' }}>Welcome back, Admin!</h2>
+      <h2 className="text-3xl font-bold mb-6" style={{ color: 'black' }}>
+        Welcome back, {dashboardMode === 'admin' ? 'Admin' : 'Employee'}!
+      </h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Monthly Chart */}

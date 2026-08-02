@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MdAssessment, MdPersonAdd, MdClose, MdCheckCircle, MdError, MdAdd, MdEdit, MdDelete, MdSettingsBackupRestore, MdCloudDownload, MdUploadFile, MdWarning, MdSchedule, MdDragIndicator } from 'react-icons/md'
 import { apiUrl } from '../utils/apiConfig'
+import { fetchActivityLogs, fetchSignatories, saveSignatory, softDeleteSignatory, restoreSignatory, restoreDefaultSignatories } from '../utils/supabaseServices'
 
 const Backup = ({ currentUser }) => {
   const [status, setStatus] = useState({ isOpen: false, type: 'success', message: '' })
@@ -141,6 +142,7 @@ const Backup = ({ currentUser }) => {
       <div>
         <h2 className="text-3xl font-bold text-slate-800">Database Backup & Restore</h2>
         <p className="text-slate-500 text-sm mt-1">Safeguard your system data with periodic backups.</p>
+        <p className="text-sm text-slate-400 mt-2">Note: This backup and restore interface still uses the Django backend API. Supabase CRUD is already active in other views, but file-based backup/restore remains backend-dependent.</p>
       </div>
 
       {/* Warning Banner */}
@@ -394,16 +396,16 @@ const ActivityLogs = () => {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch(apiUrl('activity_logs/'))
-      if (!res.ok) {
-        console.error(`API returned status: ${res.status}`)
+      const res = await fetchActivityLogs()
+      if (!res.error) {
+        setLogs(res.data || [])
+      } else {
+        console.error('Failed to fetch activity logs:', res.error)
+        setLogs([])
       }
-      const data = await res.json()
-      const logsArray = Array.isArray(data) ? data : (data.results || [])
-      setLogs(logsArray)
     } catch (err) {
       console.error('Failed to fetch logs:', err)
-      setLogs([]) // Ensure it's always an array
+      setLogs([])
     } finally {
       setIsLoading(false)
     }
@@ -528,19 +530,18 @@ const DocumentSettings = ({ currentUser }) => {
   const [triedSubmitSignatory, setTriedSubmitSignatory] = useState(false)
 
   useEffect(() => {
-    fetchSignatories()
+    loadSignatories()
   }, [])
 
-  const fetchSignatories = async () => {
+  const loadSignatories = async () => {
     try {
-      const res = await fetch(apiUrl('signatories/'))
-      const data = await res.json()
-      setSignatories(data)
-
-      const delRes = await fetch(apiUrl('signatories/deleted/'))
-      if (delRes.ok) {
-        const delData = await delRes.json()
-        setDeletedSignatories(delData)
+      const res = await fetchSignatories(true)
+      if (!res.error) {
+        const allSignatories = res.data || []
+        setSignatories(allSignatories.filter(sig => !sig.is_deleted))
+        setDeletedSignatories(allSignatories.filter(sig => sig.is_deleted))
+      } else {
+        console.error('Failed to fetch signatories:', res.error)
       }
     } catch (err) {
       console.error(err)
@@ -551,12 +552,9 @@ const DocumentSettings = ({ currentUser }) => {
 
   const handleRestoreSignatory = async (id) => {
     try {
-      const res = await fetch(apiUrl(`signatories/${id}/restore/`), {
-        method: 'POST',
-        headers: { 'X-User': currentUser?.name || 'System' }
-      })
-      if (res.ok) {
-        fetchSignatories()
+      const res = await restoreSignatory(id)
+      if (!res.error) {
+        loadSignatories()
         setStatusModal({
           isOpen: true,
           type: 'success',
@@ -581,18 +579,16 @@ const DocumentSettings = ({ currentUser }) => {
 
   const handleRestoreDefaults = async () => {
     try {
-      const res = await fetch(apiUrl('signatories/restore_defaults/'), {
-        method: 'POST',
-        headers: { 'X-User': currentUser?.name || 'System' }
-      })
-      if (res.ok) {
-        fetchSignatories()
+      const res = await restoreDefaultSignatories()
+      if (!res.error) {
+        loadSignatories()
         setStatusModal({
           isOpen: true,
           type: 'success',
           message: 'Default signatories restored successfully!'
         })
       } else {
+        console.error('Failed to restore default signatories:', res.error)
         setStatusModal({
           isOpen: true,
           type: 'error',
@@ -655,30 +651,24 @@ const DocumentSettings = ({ currentUser }) => {
     }
 
     try {
-      const url = editingSignatory 
-        ? apiUrl(`signatories/${editingSignatory.id}/`) 
-        : apiUrl('signatories/')
-      
-      const method = editingSignatory ? 'PUT' : 'POST'
+      const payload = {
+        id: editingSignatory?.id,
+        name: formData.name.trim(),
+        designation: formData.designation.trim(),
+        role: formData.role.trim(),
+      }
+      const res = await saveSignatory(payload)
 
-      const res = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User': currentUser?.name || 'System'
-        },
-        body: JSON.stringify(formData)
-      })
-
-      if (res.ok) {
+      if (!res.error) {
         setIsModalOpen(false)
-        fetchSignatories()
+        loadSignatories()
         setStatusModal({ 
           isOpen: true, 
           type: 'success', 
           message: editingSignatory ? 'Signatory updated successfully!' : 'Signatory added successfully!' 
         })
       } else {
+        console.error('Failed to save signatory:', res.error)
         setStatusModal({ isOpen: true, type: 'error', message: 'Failed to save signatory.' })
       }
     } catch (err) {
@@ -701,18 +691,16 @@ const DocumentSettings = ({ currentUser }) => {
     const { sigId } = deleteConfirmModal
     setDeleteConfirmModal({ isOpen: false, sigId: null, sigName: '' })
     try {
-      const res = await fetch(apiUrl(`signatories/${sigId}/`), {
-        method: 'DELETE',
-        headers: { 'X-User': currentUser?.name || 'System' }
-      })
-      if (res.ok) {
-        fetchSignatories()
+      const res = await softDeleteSignatory(sigId)
+      if (!res.error) {
+        loadSignatories()
         setStatusModal({
           isOpen: true,
           type: 'success',
           message: 'Signatory deleted successfully!'
         })
       } else {
+        console.error('Failed to delete signatory:', res.error)
         setStatusModal({
           isOpen: true,
           type: 'error',
@@ -1072,15 +1060,17 @@ const UserManagement = ({ currentUser }) => {
     }
   }
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users.filter((user) => {
     const matchesRole = selectedRole === 'All' || user.role === selectedRole
-    const matchesSearch = !searchTerm || 
-      user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = !searchTerm ||
+      user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchTerm.toLowerCase())
+
     return matchesRole && matchesSearch
   })
+
   const handleOpenCreateModal = () => {
     setEditingUser(null)
     setTriedSubmit(false)
@@ -1096,24 +1086,29 @@ const UserManagement = ({ currentUser }) => {
       last_name: user.last_name || '',
       email: user.email || user.username || '',
       role: user.role || 'Employee',
-      password: '' // leave blank unless changing
+      password: ''
     })
     setIsModalOpen(true)
   }
+
   const handleSaveUser = async () => {
     setTriedSubmit(true)
     if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.email.trim()) {
-      setStatusModal({ isOpen: true, type: 'error', message: 'All fields (First Name, Last Name, and Email) are required. No blank spaces can be passed.' })
+      setStatusModal({
+        isOpen: true,
+        type: 'error',
+        message: 'All fields (First Name, Last Name, and Email) are required. No blank spaces can be passed.'
+      })
       return
     }
 
     try {
-      const url = editingUser 
-        ? apiUrl(`accounts/users/${editingUser.id}/`) 
+      const url = editingUser
+        ? apiUrl(`accounts/users/${editingUser.id}/`)
         : apiUrl('accounts/users/')
-      
+
       const method = editingUser ? 'PUT' : 'POST'
-      
+
       const payload = {
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
@@ -1121,7 +1116,7 @@ const UserManagement = ({ currentUser }) => {
         username: formData.email.trim(),
         role: formData.role
       }
-      
+
       if (formData.password) {
         payload.password = formData.password
       } else if (!editingUser) {
@@ -1136,18 +1131,24 @@ const UserManagement = ({ currentUser }) => {
         },
         body: JSON.stringify(payload)
       })
-      
+
       const data = await res.json()
-      
+
       if (res.ok) {
         setIsModalOpen(false)
         setTriedSubmit(false)
         setEditingUser(null)
         setFormData({ first_name: '', last_name: '', email: '', role: 'Employee', password: '' })
         fetchUsers()
-        setStatusModal({ isOpen: true, type: 'success', message: editingUser ? 'User updated successfully!' : 'User created successfully!' })
+        setStatusModal({
+          isOpen: true,
+          type: 'success',
+          message: editingUser ? 'User updated successfully!' : 'User created successfully!'
+        })
       } else {
-        const errorMsg = data.username ? `Username: ${data.username[0]}` : (data.email ? `Email: ${data.email[0]}` : `Failed to ${editingUser ? 'update' : 'create'} user.`)
+        const errorMsg = data.username
+          ? `Username: ${data.username[0]}`
+          : (data.email ? `Email: ${data.email[0]}` : `Failed to ${editingUser ? 'update' : 'create'} user.`)
         setStatusModal({ isOpen: true, type: 'error', message: errorMsg })
       }
     } catch (err) {
@@ -1157,8 +1158,9 @@ const UserManagement = ({ currentUser }) => {
   }
 
   const handleArchiveUser = async (id) => {
-    const user = users.find(u => u.id === id)
+    const user = users.find((u) => u.id === id)
     if (!user) return
+
     setArchiveConfirmModal({
       isOpen: true,
       userId: id,
@@ -1169,6 +1171,7 @@ const UserManagement = ({ currentUser }) => {
   const confirmArchiveUser = async () => {
     const { userId } = archiveConfirmModal
     setArchiveConfirmModal({ isOpen: false, userId: null, userName: '' })
+
     try {
       const res = await fetch(apiUrl(`accounts/users/${userId}/archive/`), {
         method: 'POST',
@@ -1177,6 +1180,7 @@ const UserManagement = ({ currentUser }) => {
           'X-User': currentUser?.name || 'System'
         }
       })
+
       if (res.ok) {
         fetchUsers()
         setStatusModal({ isOpen: true, type: 'success', message: 'User archived successfully!' })
@@ -1191,84 +1195,87 @@ const UserManagement = ({ currentUser }) => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-8 relative">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold" style={{ color: 'black' }}>User Management</h2>
-        <button 
-          onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 bg-[#0B6623] hover:bg-[#09501b] text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm cursor-pointer"
-        >
-          <MdPersonAdd className="w-5 h-5" />
-          Create User
-        </button>
-      </div>
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold" style={{ color: 'black' }}>User Management</h2>
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 bg-[#0B6623] hover:bg-[#09501b] text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm cursor-pointer"
+          >
+            <MdPersonAdd className="w-5 h-5" />
+            Create User
+          </button>
+        </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Search</label>
-            <input 
-              type="text"
-              placeholder="Search by name, email, or username..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]"
-            />
-          </div>
-          <div className="w-full md:w-48">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Filter by Role</label>
-            <select 
-              value={selectedRole}
-              onChange={e => setSelectedRole(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] text-slate-700"
-            >
-              <option value="All">All Roles</option>
-              <option value="Admin">Admin</option>
-              <option value="Employee">Employee</option>
-            </select>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Search</label>
+              <input
+                type="text"
+                placeholder="Search by name, email, or username..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]"
+              />
+            </div>
+            <div className="w-full md:w-48">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Filter by Role</label>
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] text-slate-700"
+              >
+                <option value="All">All Roles</option>
+                <option value="Admin">Admin</option>
+                <option value="Employee">Employee</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        {isLoading ? (
-          <div className="p-8 text-center text-slate-500">Loading users...</div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm font-semibold uppercase tracking-wider">
-                <th className="p-4 pl-6">Name</th>
-                <th className="p-4">Email / Username</th>
-                <th className="p-4">Role</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 pr-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredUsers.map(user => (
-                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 pl-6 font-medium text-slate-800">
-                    {user.first_name || user.last_name ? `${user.first_name} ${user.last_name}` : user.username}
-                  </td>
-                  <td className="p-4 text-slate-500">{user.email || user.username}</td>
-                  <td className="p-4 text-slate-600">{user.role}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="p-4 pr-6 text-right space-x-3">
-                    <button onClick={() => handleOpenEditModal(user)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">Edit</button>
-                    <button onClick={() => handleArchiveUser(user.id)} className="text-amber-600 hover:text-amber-800 text-sm font-medium transition-colors">Archive</button>
-                  </td>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          {isLoading ? (
+            <div className="p-8 text-center text-slate-500">Loading users...</div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm font-semibold uppercase tracking-wider">
+                  <th className="p-4 pl-6">Name</th>
+                  <th className="p-4">Email / Username</th>
+                  <th className="p-4">Role</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 pr-6 text-right">Actions</th>
                 </tr>
-              ))}
-              {filteredUsers.length === 0 && (
-                <tr><td colSpan="5" className="p-8 text-center text-slate-500">No users found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-4 pl-6 font-medium text-slate-800">
+                      {user.first_name || user.last_name ? `${user.first_name} ${user.last_name}` : user.username}
+                    </td>
+                    <td className="p-4 text-slate-500">{user.email || user.username}</td>
+                    <td className="p-4 text-slate-600">{user.role}</td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="p-4 pr-6 text-right space-x-3">
+                      <button onClick={() => handleOpenEditModal(user)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">Edit</button>
+                      <button onClick={() => handleArchiveUser(user.id)} className="text-amber-600 hover:text-amber-800 text-sm font-medium transition-colors">Archive</button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-8 text-center text-slate-500">No users found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       {isModalOpen && (
@@ -1285,45 +1292,55 @@ const UserManagement = ({ currentUser }) => {
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">First Name</label>
-                  <input 
-                    type="text" 
-                    value={formData.first_name} 
-                    onChange={e => setFormData({...formData, first_name: e.target.value})} 
+                  <input
+                    type="text"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                     className={`w-full bg-slate-50 border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] ${
                       triedSubmit && !formData.first_name.trim() ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-200'
-                    }`} 
+                    }`}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Last Name</label>
-                  <input 
-                    type="text" 
-                    value={formData.last_name} 
-                    onChange={e => setFormData({...formData, last_name: e.target.value})} 
+                  <input
+                    type="text"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                     className={`w-full bg-slate-50 border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] ${
                       triedSubmit && !formData.last_name.trim() ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-200'
-                    }`} 
+                    }`}
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Email Address</label>
-                <input 
-                  type="email" 
-                  value={formData.email} 
-                  onChange={e => setFormData({...formData, email: e.target.value})} 
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className={`w-full bg-slate-50 border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] ${
                     triedSubmit && !formData.email.trim() ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-200'
-                  }`} 
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Password</label>
-                <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={editingUser ? "Leave blank to keep current password" : "Leave blank for dar12345"} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]" />
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder={editingUser ? 'Leave blank to keep current password' : 'Leave blank for dar12345'}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623]"
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Role</label>
-                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] text-slate-700">
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/20 focus:border-[#0B6623] text-slate-700"
+                >
                   <option value="Admin">Admin</option>
                   <option value="Employee">Employee</option>
                 </select>
@@ -1337,7 +1354,6 @@ const UserManagement = ({ currentUser }) => {
         </div>
       )}
 
-      {/* Archive Confirmation Modal */}
       {archiveConfirmModal.isOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
@@ -1352,13 +1368,13 @@ const UserManagement = ({ currentUser }) => {
               Archived users will not be able to log in to the system.
             </p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setArchiveConfirmModal({ isOpen: false, userId: null, userName: '' })}
                 className="flex-1 py-3 text-slate-600 font-bold border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={confirmArchiveUser}
                 className="flex-1 py-3 text-white font-bold bg-amber-600 rounded-xl hover:bg-amber-700 shadow-lg transition-colors"
               >
@@ -1369,7 +1385,6 @@ const UserManagement = ({ currentUser }) => {
         </div>
       )}
 
-      {/* Status Modal (Success/Error) */}
       {statusModal.isOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
@@ -1382,17 +1397,17 @@ const UserManagement = ({ currentUser }) => {
                 <MdError className="w-8 h-8" />
               </div>
             )}
-            
+
             <h3 className="text-xl font-bold text-slate-800 mb-2">
               {statusModal.type === 'success' ? 'Success!' : 'Error'}
             </h3>
             <p className="text-slate-500 text-sm mb-8">{statusModal.message}</p>
-            
-            <button 
-              onClick={() => setStatusModal({ ...statusModal, isOpen: false })} 
+
+            <button
+              onClick={() => setStatusModal({ ...statusModal, isOpen: false })}
               className={`w-full py-3 text-white font-bold rounded-xl transition-colors shadow-lg ${
-                statusModal.type === 'success' 
-                  ? 'bg-green-600 hover:bg-green-700 shadow-green-600/20' 
+                statusModal.type === 'success'
+                  ? 'bg-green-600 hover:bg-green-700 shadow-green-600/20'
                   : 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
               }`}
             >

@@ -5,7 +5,8 @@ import {
   MdClose,
   MdDescription,
 } from 'react-icons/md'
-import { apiUrl } from './utils/apiConfig'
+import { fetchActivityLogs } from './utils/supabaseServices'
+import { supabase } from './utils/supabaseClient'
 
 import Login from './pages/login'
 import Sidebar from './pages/components/sidebar'
@@ -54,6 +55,62 @@ function App() {
   })
 
   // Sync state to localStorage
+  useEffect(() => {
+    if (!supabase) return undefined
+
+    let mounted = true
+
+    const syncCurrentUser = async (session) => {
+      if (!session?.user || !mounted) return
+
+      try {
+        const user = session.user
+        const { data: metadataRow } = await supabase
+          .from('auth_metadata')
+          .select('user_level')
+          .eq('uid', user.id)
+          .maybeSingle()
+
+        const explicitRole = user.user_metadata?.role || user.app_metadata?.role || ''
+        const isAdminRole = /admin/i.test(explicitRole)
+        const isAdminEmail = /\badmin\b/i.test(user.email || '')
+        const rawUserLevel = metadataRow?.user_level ?? user.user_metadata?.user_level ?? user.app_metadata?.user_level
+        const userLevel = Number.isFinite(Number(rawUserLevel)) ? Number(rawUserLevel) : (isAdminRole || isAdminEmail ? 1 : 2)
+        const role = (userLevel === 1 || isAdminRole || isAdminEmail) ? 'Admin' : 'Employee'
+        const dashboardMode = role === 'Admin' ? 'admin' : 'employee'
+
+        setCurrentUser(prev => ({
+          ...(prev || {}),
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name || user.email,
+          username: user.email,
+          role,
+          dashboardMode,
+          userLevel,
+        }))
+      } catch (err) {
+        console.warn('Supabase user sync failed:', err)
+      }
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      syncCurrentUser(session)
+    })
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => syncCurrentUser(session))
+      .catch((err) => {
+        console.warn('Supabase session sync failed:', err)
+      })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
   useEffect(() => {
     localStorage.setItem('dar_is_logged_in', String(isLoggedIn))
     if (currentUser) {
@@ -109,14 +166,11 @@ function App() {
   // Fetch recent activity logs for notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl(`activity_logs/?limit=${NOTIF_LIMIT}`))
-      if (res.ok) {
-        const data = await res.json()
-        const logs = Array.isArray(data) ? data : (data.results || [])
-        const items = logs.slice(0, NOTIF_LIMIT)
+      const logsRes = await fetchActivityLogs(NOTIF_LIMIT)
+      if (!logsRes.error) {
+        const items = (logsRes.data || []).slice(0, NOTIF_LIMIT)
         setNotifications(items)
 
-        // Check for new notifications using the latest log id stored in localStorage
         const lastSeenId = localStorage.getItem('dar_last_seen_notif_id')
         if (items.length > 0) {
           const latestId = String(items[0].id)
@@ -124,6 +178,8 @@ function App() {
             setHasNewNotif(true)
           }
         }
+      } else {
+        console.error('Failed to fetch notifications:', logsRes.error)
       }
     } catch (err) {
       console.error('Failed to fetch notifications:', err)
@@ -209,9 +265,18 @@ function App() {
   }
 
   const handleLogin = (user) => {
-    setCurrentUser(user)
+    const normalizedUser = {
+      ...user,
+      role: user?.role || 'Employee',
+      dashboardMode: user?.dashboardMode || 'employee',
+      userLevel: user?.userLevel ?? 2,
+    }
+
+    setCurrentUser(normalizedUser)
     setIsLoggedIn(true)
     setActiveTab('dashboard')
+    localStorage.setItem('dar_current_user', JSON.stringify(normalizedUser))
+    localStorage.setItem('dar_is_logged_in', 'true')
   }
 
   const handleLogout = () => {
@@ -305,7 +370,7 @@ function App() {
 
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />
+        return <Dashboard dashboardMode={currentUser?.dashboardMode || 'employee'} />
       case 'report':
         return <Reports />
       case 'activity_logs':

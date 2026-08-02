@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { MdLock, MdPerson, MdVisibility, MdVisibilityOff } from 'react-icons/md'
 import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
-import { apiUrl } from '../utils/apiConfig'
+import { supabase } from '../utils/supabaseClient'
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('')
@@ -16,36 +16,62 @@ const Login = ({ onLogin }) => {
     setError('')
 
     if (!username || !password) {
-      setError('Please enter your username and password.')
+      setError('Please enter your email and password.')
       return
     }
 
     setIsLoading(true)
 
-    // Real API call to Django backend
     try {
-      const res = await fetch(apiUrl('accounts/login/'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      })
-      
-      const data = await res.json()
-      
-      if (res.ok) {
-        onLogin({
-          role: data.role,
-          name: data.first_name || data.last_name ? `${data.first_name} ${data.last_name}`.trim() : data.username,
-          username: data.username
-        })
-      } else {
-        setError(data.error || 'Invalid username or password.')
+      if (!supabase) {
+        setError('Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the frontend environment.')
+        return
       }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: username.trim(),
+        password,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      const user = data?.user
+      if (!user) {
+        throw new Error('No authenticated user returned from Supabase.')
+      }
+
+      const { data: metadataRow, error: metadataError } = await supabase
+        .from('auth_metadata')
+        .select('user_level')
+        .eq('uid', user.id)
+        .maybeSingle()
+
+      if (metadataError) {
+        console.warn('Could not load auth_metadata.user_level, falling back to default role.', metadataError)
+      }
+
+      const explicitRole = user.user_metadata?.role || user.app_metadata?.role || ''
+      const isAdminRole = /admin/i.test(explicitRole)
+      const isAdminEmail = /\badmin\b/i.test(user.email || '')
+      const rawUserLevel = metadataRow?.user_level ?? user.user_metadata?.user_level ?? user.app_metadata?.user_level
+      const userLevel = Number.isFinite(Number(rawUserLevel)) ? Number(rawUserLevel) : (isAdminRole || isAdminEmail ? 1 : 2)
+      const role = (userLevel === 1 || isAdminRole || isAdminEmail) ? 'Admin' : 'Employee'
+      const dashboardMode = role === 'Admin' ? 'admin' : 'employee'
+
+      onLogin({
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.email,
+        username: user.email,
+        role,
+        dashboardMode,
+        userLevel,
+      })
     } catch (err) {
-      console.error(err)
-      setError('Cannot connect to the server.')
+      console.error('Supabase login failed:', err)
+      setError(err?.message || 'Invalid email or password.')
     } finally {
       setIsLoading(false)
     }
@@ -72,7 +98,7 @@ const Login = ({ onLogin }) => {
             {/* Username */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                Username
+                Email
               </label>
               <div className="relative">
                 <MdPerson className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -81,8 +107,8 @@ const Login = ({ onLogin }) => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  autoComplete="username"
+                  placeholder="Enter your email"
+                  autoComplete="email"
                   className="w-full bg-white border border-stone-200 text-slate-800 placeholder-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B6623]/25 focus:border-[#0B6623] transition-all duration-200 shadow-sm"
                 />
               </div>

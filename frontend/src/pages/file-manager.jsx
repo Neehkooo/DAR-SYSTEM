@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { MdVisibility, MdPrint, MdRefresh, MdError, MdDescription, MdSearch, MdClose, MdAdd, MdRemove, MdCalendarToday, MdChevronLeft, MdChevronRight } from 'react-icons/md'
-
-const API_BASE = 'http://127.0.0.1:8000'
+import { fetchAllDocuments } from '../utils/supabaseServices'
 
 /* ─────────────────────────────────────────────
    Official Header (matching templates.jsx)
@@ -1066,21 +1065,20 @@ const FileManager = () => {
   const [selectedItem, setSelectedItem] = useState(null)
   const [previewHtml, setPreviewHtml] = useState('')
 
-  const endpoints = useMemo(
+  const documentSources = useMemo(
     () => [
-      { key: 'noa', label: 'NOTICE OF AWARD', url: `${API_BASE}/api/noa/`, type: 'noa', nameField: 'name', dateField: 'date_created' },
-      { key: 'ntp', label: 'NOTICE TO PROCEED', url: `${API_BASE}/api/ntp/`, type: 'ntp', nameField: 'name', dateField: 'date_created' },
+      { key: 'noa', label: 'NOTICE OF AWARD', type: 'noa', nameField: 'name', dateField: 'date_created' },
+      { key: 'ntp', label: 'NOTICE TO PROCEED', type: 'ntp', nameField: 'name', dateField: 'date_created' },
       {
-        key: 'reso_direct_acquisition',
+        key: 'reso',
         label: 'RESO FOR DIRECT ACQUISITION',
-        url: `${API_BASE}/api/reso/`,
         type: 'reso_direct_acquisition',
         nameField: 'company_name',
         dateField: 'date_created',
       },
-      { key: 'reso_svp', label: 'RESO FOR SVP', url: `${API_BASE}/api/reso_svp/`, type: 'reso_svp', nameField: 'company_name', dateField: 'date_created' },
-      { key: 'reso_lov', label: 'RESO FOR LOV', url: `${API_BASE}/api/reso_lov/`, type: 'reso_lov', nameField: 'company_name', dateField: 'date_created' },
-      { key: 'reso_emergency_split', label: 'RESO FOR EMERGENCY - SPLIT', url: `${API_BASE}/api/reso_emergency_split/`, type: 'reso_emergency_split', nameField: 'company_name', dateField: 'date_created' },
+      { key: 'reso_svp', label: 'RESO FOR SVP', type: 'reso_svp', nameField: 'company_name', dateField: 'date_created' },
+      { key: 'reso_lov', label: 'RESO FOR LOV', type: 'reso_lov', nameField: 'company_name', dateField: 'date_created' },
+      { key: 'reso_emergency_split', label: 'RESO FOR EMERGENCY - SPLIT', type: 'reso_emergency_split', nameField: 'company_name', dateField: 'date_created' },
     ],
     []
   )
@@ -1090,26 +1088,18 @@ const FileManager = () => {
     setError('')
 
     try {
-      const results = await Promise.all(
-        endpoints.map(async (ep) => {
-          const res = await fetch(ep.url)
-          if (!res.ok) throw new Error(`Failed to load ${ep.label}`)
-          const data = await res.json()
-
-          const list = Array.isArray(data) ? data : data.results || []
-
-          return list.map((row) => ({
-            id: row.id,
-            docTypeLabel: ep.label,
-            docTypeKey: ep.type,
-            name: row[ep.nameField] || row.name || row.company_name || row.title || `#${row.id}`,
-            dateCreated: row[ep.dateField] || row.date_created || row.doc_date || row.reso_date || row.timestamp || row.created_at || null,
-            raw: row,
-          }))
-        })
-      )
-
-      const flattened = results.flat()
+      const results = await fetchAllDocuments()
+      const flattened = documentSources.flatMap((source) => {
+        const rows = results[source.key] || []
+        return rows.map((row) => ({
+          id: row.id,
+          docTypeLabel: source.label,
+          docTypeKey: source.type,
+          name: row[source.nameField] || row.name || row.company_name || row.title || `#${row.id}`,
+          dateCreated: row[source.dateField] || row.date_created || row.doc_date || row.reso_date || row.timestamp || row.created_at || null,
+          raw: row,
+        }))
+      })
 
       flattened.sort((a, b) => {
         const da = a.dateCreated ? new Date(a.dateCreated).getTime() : 0

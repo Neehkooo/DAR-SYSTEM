@@ -21,7 +21,7 @@ import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
 import socotecLogo from '../assets/SOCOTEC-LOGO.png'
 import html2pdf from 'html2pdf.js'
-import { apiUrl } from '../utils/apiConfig'
+import { createDocument, deleteDocument, fetchSignatories } from '../utils/supabaseServices'
 
 /* ─────────────────────────────────────────────
    Official Header
@@ -973,15 +973,11 @@ const readApiError = async (res, fallback) => {
 }
 
 const saveDocument = async (endpoint, payload, currentUser, fallbackMsg) => {
-  const res = await fetch(apiUrl(endpoint), {
-    method: 'POST',
-    headers: apiHeaders(currentUser),
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    throw new Error(await readApiError(res, fallbackMsg))
+  const result = await createDocument(endpoint, payload)
+  if (result.error) {
+    throw new Error(result.error.message || fallbackMsg)
   }
-  return res.json()
+  return result.data?.[0] || null
 }
 
 const textOrEmpty = (value) => (value != null ? String(value).trim() : '')
@@ -1105,10 +1101,11 @@ const Templates = ({
 
   const fetchDbSignatories = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/signatories/')
-      if (res.ok) {
-        const data = await res.json()
-        setDbSignatories(data)
+      const res = await fetchSignatories()
+      if (!res.error) {
+        setDbSignatories(res.data || [])
+      } else {
+        console.error('Error fetching signatories', res.error)
       }
     } catch (err) {
       console.error('Error fetching signatories', err)
@@ -1357,10 +1354,7 @@ const Templates = ({
           await saveDocument('ntp', ntpPayload, currentUser, 'Failed to save NTP Document.')
         } catch (err) {
           if (noaRecord?.id) {
-            await fetch(`http://127.0.0.1:8000/api/noa/${noaRecord.id}/`, {
-              method: 'DELETE',
-              headers: apiHeaders(currentUser),
-            })
+            await deleteDocument('noa', noaRecord.id)
           }
           throw err
         }
@@ -1429,7 +1423,7 @@ const Templates = ({
         err?.message === 'Failed to fetch' ||
         err?.message === 'NetworkError when attempting to fetch resource.'
       const message = isNetworkError
-        ? 'Could not reach the server. Make sure the Django backend is running on http://127.0.0.1:8000 and try again.'
+        ? 'Could not save document. Please check your network and Supabase configuration.'
         : (err.message || 'Failed to save to database.')
       setStatusModal({ isOpen: true, type: 'error', message })
     } finally {

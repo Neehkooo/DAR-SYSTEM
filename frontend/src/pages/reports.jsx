@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { MdPrint, MdClose, MdFilterList, MdCheck, MdTrendingUp, MdInsertDriveFile, MdAttachMoney } from 'react-icons/md'
 import darLogo from '../assets/Department_of_Agrarian_Reform_(DAR).svg.png'
 import bagongPilipinasLogo from '../assets/Header_Footer/Bagong_Pilipinas_logo.png'
-import { apiUrl } from '../utils/apiConfig'
+import { fetchDocuments } from '../utils/supabaseServices'
 
 const colors = {
   noa: '#0B6623',
@@ -81,24 +81,25 @@ const Reports = () => {
   const fetchData = async () => {
     try {
       const endpoints = [
-        { url: apiUrl('noa/'), setter: setNoaList },
-        { url: apiUrl('ntp/'), setter: setNtpList },
-        { url: apiUrl('reso/'), setter: setResoList },
-        { url: apiUrl('reso_svp/'), setter: setResoSVPList },
-        { url: apiUrl('reso_lov/'), setter: setResoLOVList },
-        { url: apiUrl('reso_emergency_split/'), setter: setResoEmergencySplitList }
+        { type: 'noa', setter: setNoaList },
+        { type: 'ntp', setter: setNtpList },
+        { type: 'reso', setter: setResoList },
+        { type: 'reso_svp', setter: setResoSVPList },
+        { type: 'reso_lov', setter: setResoLOVList },
+        { type: 'reso_emergency_split', setter: setResoEmergencySplitList }
       ]
 
       await Promise.all(
         endpoints.map(async (endpoint) => {
           try {
-            const res = await fetch(endpoint.url)
-            if (res.ok) {
-              const data = await res.json()
-              endpoint.setter(data)
+            const res = await fetchDocuments(endpoint.type, { notDeleted: true })
+            if (!res.error) {
+              endpoint.setter(res.data || [])
+            } else {
+              console.error(`Error loading ${endpoint.type}:`, res.error)
             }
           } catch (err) {
-            console.error(`Error loading data from ${endpoint.url}:`, err)
+            console.error(`Error loading ${endpoint.type}:`, err)
           }
         })
       )

@@ -86,11 +86,14 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 import dj_database_url
 
-# Use PostgreSQL in production, SQLite in development
-if 'DATABASE_URL' in __import__('os').environ:
+# Prefer the standard DATABASE_URL env var, but also allow a Supabase-specific override.
+DATABASE_URL = __import__('os').environ.get('DATABASE_URL') or __import__('os').environ.get('SUPABASE_DATABASE_URL')
+
+# Use PostgreSQL in production, SQLite in development.
+if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.config(
-            default=__import__('os').environ.get('DATABASE_URL'),
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
         )
@@ -143,6 +146,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ] if (BASE_DIR / 'static').exists() else []
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Settings
 import os
